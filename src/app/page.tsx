@@ -61,51 +61,61 @@ const FeatureItem: React.FC<FeatureItemProps> = ({
     delay = 0,
 }) => {
     const ref = useRef<HTMLDivElement>(null);
-    const [isVisible, setIsVisible] = useState(false);
+    const observerRef = useRef<IntersectionObserver | null>(null);
+    const [isInView, setIsInView] = useState(false);
 
     useEffect(() => {
-        // observerとelementをuseEffectのスコープ内で定義
-        // ref.currentの値をローカル変数にコピー
-        const currentElement = ref.current;
-        let observer: IntersectionObserver | null = null; // observerをnullで初期化
+        if (typeof window === "undefined" || !ref.current) return;
 
-        // currentElementが存在する場合のみIntersectionObserverを設定
-        if (currentElement) {
-            observer = new IntersectionObserver(
-                ([entry]) => {
-                    if (entry.isIntersecting) {
-                        setIsVisible(true);
-                        // observerがnullでないことを確認してからdisconnectを呼び出す
-                        if (observer) {
-                            observer.disconnect();
+        const element = ref.current;
+
+        const handleObserver = () => {
+            const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+                observerRef.current = null;
+            }
+            if (isDesktop) {
+                setIsInView(false);
+                observerRef.current = new IntersectionObserver(
+                    ([entry]) => {
+                        if (entry.isIntersecting) {
+                            setIsInView(true);
+                            if (observerRef.current)
+                                observerRef.current.disconnect();
                         }
-                    }
-                },
-                { threshold: 0.1 }
-            );
-
-            observer.observe(currentElement);
-        }
-
-        // クリーンアップ関数
-        return () => {
-            // currentElementが存在し、かつobserverが生成されていた場合のみunobserve
-            // observerがnullでないことを確認してからdisconnectを呼び出す
-            if (currentElement && observer) {
-                observer.unobserve(currentElement); // currentElementを使用
-                observer.disconnect(); // 明示的にdisconnectも呼び出す
+                    },
+                    { threshold: 0.1 }
+                );
+                if (element) observerRef.current.observe(element);
+            } else {
+                setIsInView(true);
             }
         };
-    }, []); // 依存配列は空のままでOK、ref.currentはローカル変数でキャプチャ済み
+
+        handleObserver();
+        window.addEventListener("resize", handleObserver);
+
+        return () => {
+            window.removeEventListener("resize", handleObserver);
+            if (observerRef.current && element) {
+                observerRef.current.unobserve(element);
+                observerRef.current.disconnect();
+                observerRef.current = null;
+            }
+        };
+    }, []);
+
+    const baseClass =
+        "bg-white p-6 rounded-lg shadow-lg flex flex-col items-center text-center min-h-60 opacity-100 translate-y-0";
+    const animationClass = isInView
+        ? "opacity-100 translate-y-0"
+        : "opacity-100 translate-y-0 md:opacity-0 md:translate-y-10";
 
     return (
         <div
             ref={ref}
-            className={`bg-white p-6 rounded-lg shadow-lg flex flex-col items-center text-center transition-all duration-700 ease-out ${
-                isVisible
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-10"
-            }`}
+            className={`${baseClass} ${animationClass}`}
             style={{ transitionDelay: `${delay}ms` }}
         >
             <div className="text-4xl text-blue-600 mb-4">{icon}</div>
@@ -306,134 +316,132 @@ const LPPage: React.FC = () => {
 
     // スクロール時のアニメーション制御（Intersection Observerの汎用的な適用例）
     useEffect(() => {
+        // 1. セクション表示用 IntersectionObserver を作成
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
                     if (entry.isIntersecting) {
-                        entry.target.classList.add("animate-fade-in-up"); // クラスを付与してアニメーションを開始
-                        observer.unobserve(entry.target); // 一度アニメーションしたら監視を解除
+                        entry.target.classList.add("animate-fade-in-up");
+                        observer.unobserve(entry.target);
                     }
                 });
             },
-            { threshold: 0.2 } // 20%が見えたら発火
+            { threshold: 0.2 }
         );
 
+        // 2. refs.current に登録されたすべてのセクションを「スクロールで表示」の対象にし、
+        //    モバイル時は features セクションだけ即座に表示
         Object.values(refs.current).forEach((el) => {
-            if (el) {
-                el.classList.add("animate-on-scroll");
-                observer.observe(el);
+            if (!el) return;
+            el.classList.add("animate-on-scroll");
+            observer.observe(el);
+
+            if (window.innerWidth < 768 && el.id === "features") {
+                el.classList.add("animate-fade-in-up");
             }
         });
 
+        // 3. カウンターをアニメーションさせる関数
         const animateCounters = () => {
-            document.querySelectorAll(".animate-counter").forEach((element) => {
-                const dataCount = element.getAttribute("data-count");
-                if (!dataCount) return;
+            document
+                .querySelectorAll<HTMLElement>(".animate-counter")
+                .forEach((element) => {
+                    const dataCount = element.getAttribute("data-count");
+                    if (!dataCount) return;
 
-                const targetValue = parseFloat(dataCount.replace(/\+$/, "")); // 末尾の+を除去して数値化
-                const hasPlusSuffix = dataCount.includes("+"); // 元のdata-countに+が含まれるかチェック
-                let current = 0;
-                const increment = targetValue / 200; // アニメーションの速度調整
+                    const targetValue = parseFloat(
+                        dataCount.replace(/\+$/, "")
+                    );
+                    const hasPlusSuffix = dataCount.includes("+");
+                    let current = 0;
+                    const increment = targetValue / 200;
 
-                // アニメーション開始前に要素のtextContentを初期値にリセット
-                if (targetValue % 1 === 0) {
-                    // 整数
-                    element.textContent = "0";
-                } else {
-                    // 小数
-                    element.textContent = "0.0";
-                }
-
-                const updateCounter = () => {
-                    current += increment;
-                    if (current < targetValue) {
-                        let displayValue;
-                        if (targetValue % 1 === 0) {
-                            // 整数
-                            displayValue = Math.floor(current);
-                        } else {
-                            // 小数
-                            displayValue = (
-                                Math.round(current * 10) / 10
-                            ).toFixed(1);
-                        }
-                        element.textContent = displayValue.toLocaleString();
-                        requestAnimationFrame(updateCounter);
+                    // 初期表示をリセット
+                    if (targetValue % 1 === 0) {
+                        element.textContent = "0";
                     } else {
-                        // アニメーション完了時は目標値を表示し、必要であれば+を付与
-                        element.textContent = targetValue.toLocaleString();
-                        if (hasPlusSuffix) {
-                            element.textContent += "+";
-                        }
+                        element.textContent = "0.0";
                     }
-                };
-                updateCounter();
-            });
+
+                    const updateCounter = () => {
+                        current += increment;
+                        if (current < targetValue) {
+                            let displayValue: string;
+                            if (targetValue % 1 === 0) {
+                                displayValue = Math.floor(current).toString();
+                            } else {
+                                displayValue = (
+                                    Math.round(current * 10) / 10
+                                ).toFixed(1);
+                            }
+                            element.textContent = displayValue;
+                            requestAnimationFrame(updateCounter);
+                        } else {
+                            element.textContent = targetValue.toLocaleString();
+                            if (hasPlusSuffix) {
+                                element.textContent += "+";
+                            }
+                        }
+                    };
+
+                    requestAnimationFrame(updateCounter);
+                });
         };
 
+        // 4. カウンターセクション用の IntersectionObserver
         const counterObserver = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
                     if (entry.isIntersecting && !hasCountersAnimated) {
-                        // アニメーションがまだ実行されていなければ
                         animateCounters();
-                        setHasCountersAnimated(true); // アニメーション実行済みフラグを立てる
+                        setHasCountersAnimated(true);
                     }
                 });
             },
-            { threshold: 0.5 } // セクションの半分が見えたら発火
+            { threshold: 0.5 }
         );
 
-        const counterSection = document.querySelector(".counter-section");
+        const counterSection =
+            document.querySelector<HTMLElement>(".counter-section");
         if (counterSection) {
             counterObserver.observe(counterSection);
         }
 
-        // モバイルメニュー開閉時のbodyスクロールロック
+        // 5. モバイルメニュー開閉時に body のスクロールをロック／解除
         if (isMobileMenuOpen) {
             document.body.style.overflow = "hidden";
         } else {
             document.body.style.overflow = "unset";
         }
 
-        // パーティクルアニメーションのカスタムプロパティと初期スタイルを設定
+        // 6. パーティクル用 div にマウント後乱数スタイルを適用
         particleRefs.current.forEach((particleRef) => {
-            if (particleRef) {
-                // Math.random() に依存するスタイルはすべてuseEffect内で設定
-                particleRef.style.setProperty(
-                    "width",
-                    `${Math.random() * 20 + 5}px`
-                );
-                particleRef.style.setProperty(
-                    "height",
-                    `${Math.random() * 20 + 5}px`
-                );
-                particleRef.style.setProperty("top", `${Math.random() * 100}%`);
-                particleRef.style.setProperty(
-                    "left",
-                    `${Math.random() * 100}%`
-                );
-                particleRef.style.setProperty(
-                    "--rand-x",
-                    `${Math.random() * 2 - 1}`
-                );
-                particleRef.style.setProperty(
-                    "--rand-y",
-                    `${Math.random() * 2 - 1}`
-                );
-                particleRef.style.setProperty(
-                    "--animation-duration",
-                    `${Math.random() * 10 + 15}s`
-                );
-            }
+            if (!particleRef) return;
+            particleRef.style.width = `${Math.random() * 20 + 5}px`;
+            particleRef.style.height = `${Math.random() * 20 + 5}px`;
+            particleRef.style.top = `${Math.random() * 100}%`;
+            particleRef.style.left = `${Math.random() * 100}%`;
+            particleRef.style.setProperty(
+                "--rand-x",
+                `${Math.random() * 2 - 1}`
+            );
+            particleRef.style.setProperty(
+                "--rand-y",
+                `${Math.random() * 2 - 1}`
+            );
+            particleRef.style.setProperty(
+                "--animation-duration",
+                `${Math.random() * 10 + 15}s`
+            );
         });
 
+        // クリーンアップ
         return () => {
             observer.disconnect();
             if (counterSection) {
                 counterObserver.disconnect();
             }
-            document.body.style.overflow = "unset"; // アンマウント時に解除
+            document.body.style.overflow = "unset";
         };
     }, [isMobileMenuOpen, hasCountersAnimated]);
 
@@ -576,13 +584,8 @@ const LPPage: React.FC = () => {
                             ref={(el) => {
                                 if (el) particleRefs.current[i] = el;
                             }}
-                            style={{
-                                width: `${Math.random() * 20 + 5}px`,
-                                height: `${Math.random() * 20 + 5}px`,
-                                top: `${Math.random() * 100}%`,
-                                left: `${Math.random() * 100}%`,
-                            }}
-                        ></div>
+                            /* style はマウント後に useEffect で当てます */
+                        />
                     ))}{" "}
                     {/* ここに閉じ括弧を追加しました */}
                     <div className="container mx-auto px-4 text-center relative z-10">
@@ -722,7 +725,7 @@ const LPPage: React.FC = () => {
                                 3つの本質的な価値
                             </span>
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 min-h-[250px]">
                             <FeatureItem
                                 icon={<FaChartLine />}
                                 title="お客様の有限な時間を最大化"
@@ -968,16 +971,16 @@ const LPPage: React.FC = () => {
                     ref={(el) => {
                         refs.current.features = el;
                     }}
-                    className="py-20 bg-blue-50 animate-on-scroll"
+                    className="py-20 bg-blue-50"
                 >
-                    <div className="container mx-auto px-4 text-center">
+                    <div className="container mx-auto px-4 text-center min-h-[300px]">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
                             Hi, English! が提供する
                             <span className="text-blue-600">
                                 豊富な学習機能
                             </span>
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8  min-h-60">
                             <FeatureItem
                                 icon={<FaBookOpen />}
                                 title="英語学習コンテンツ"
