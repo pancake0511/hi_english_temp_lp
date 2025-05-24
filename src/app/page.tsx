@@ -1,6 +1,6 @@
 "use client"; // Client Componentとしてマーク
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image"; // Next.jsのImage最適化
 import Link from "next/link"; // Next.jsのLinkコンponent
 import {
@@ -28,7 +28,7 @@ import { AiOutlineTrophy, AiOutlineTeam } from "react-icons/ai"; // コンペ、
 import { RiFileList2Line } from "react-icons/ri"; // TODOリストアイコン
 
 // 仮の画像パス（実際はプロジェクトのpublicディレクトリなどに配置し、適切なパスに修正してください）
-const HERO_IMAGE = "/images/hero-main.png";
+// const HERO_IMAGE = "/images/hero-main.png";
 const SYSTEM_ARCHITECTURE_ILLUSTRATION = "/images/system-architecture.png"; // AI_AVATAR_ILLUSTRATIONを置き換え
 const MOCKUP_CONTENT_CREATION = "/images/mockup-content-creation.png";
 // const MOCKUP_AI_CONVERSATION = "/images/mockup-ai-conversation.png";
@@ -37,7 +37,7 @@ const MOCKUP_CONTENT_CREATION = "/images/mockup-content-creation.png";
 // const MOCKUP_VOCABULARY = "/images/mockup-vocabulary.png";
 // const MOCKUP_QA = "/images/mockup-qa.png";
 const MOCKUP_PROGRESS_DASHBOARD = "/images/mockup-progress-dashboard.png";
-const BACKGROUND_GRADIENT = "/images/background-gradient.svg"; // 仮の背景SVG
+// const BACKGROUND_GRADIENT = "/images/background-gradient.svg"; // 仮の背景SVG
 const FUTURE_VISION_IMAGE = "/images/future-vision.png"; // 未来のビジョンを示す新しい画像
 
 // CSSはTailwind CSSのクラス名を直接付与する想定です。
@@ -64,26 +64,39 @@ const FeatureItem: React.FC<FeatureItemProps> = ({
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setIsVisible(true);
-                    observer.disconnect();
-                }
-            },
-            { threshold: 0.1 }
-        );
+        // observerとelementをuseEffectのスコープ内で定義
+        // ref.currentの値をローカル変数にコピー
+        const currentElement = ref.current;
+        let observer: IntersectionObserver | null = null; // observerをnullで初期化
 
-        if (ref.current) {
-            observer.observe(ref.current);
+        // currentElementが存在する場合のみIntersectionObserverを設定
+        if (currentElement) {
+            observer = new IntersectionObserver(
+                ([entry]) => {
+                    if (entry.isIntersecting) {
+                        setIsVisible(true);
+                        // observerがnullでないことを確認してからdisconnectを呼び出す
+                        if (observer) {
+                            observer.disconnect();
+                        }
+                    }
+                },
+                { threshold: 0.1 }
+            );
+
+            observer.observe(currentElement);
         }
 
+        // クリーンアップ関数
         return () => {
-            if (ref.current) {
-                observer.unobserve(ref.current);
+            // currentElementが存在し、かつobserverが生成されていた場合のみunobserve
+            // observerがnullでないことを確認してからdisconnectを呼び出す
+            if (currentElement && observer) {
+                observer.unobserve(currentElement); // currentElementを使用
+                observer.disconnect(); // 明示的にdisconnectも呼び出す
             }
         };
-    }, []);
+    }, []); // 依存配列は空のままでOK、ref.currentはローカル変数でキャプチャ済み
 
     return (
         <div
@@ -133,6 +146,93 @@ const TestimonialCard: React.FC<TestimonialCardProps> = ({
                 <p className="text-sm text-gray-500">{title}</p>
             </div>
         </div>
+    );
+};
+
+interface CounterProps {
+    target: number; // targetは必ず数値であることを明示
+    suffix?: string; // suffixはオプションの文字列
+    decimals?: number; // decimalsはオプションの数値
+}
+
+const Counter = ({ target, suffix = "", decimals = 0 }: CounterProps) => {
+    // count の型を number または string に対応できるように修正
+    // decimals が 0 の場合は数値、それ以外は文字列として扱う
+    const [count, setCount] = useState(decimals ? "0.0" : 0); // 初期値も型に合わせて設定
+    const ref = useRef(null);
+
+    useEffect(() => {
+        // IntersectionObserverはクライアントサイドでのみ動作させる
+        if (typeof window === "undefined") {
+            return; // サーバーサイドでは何もしない
+        }
+
+        let started = false;
+        const animate = () => {
+            if (started) return;
+            started = true;
+
+            const start = 0;
+            const end = Number(target); // target は数値として扱われることを前提
+            const startTime = performance.now();
+
+            const tick = (now: DOMHighResTimeStamp) => {
+                const elapsed = now - startTime;
+                // アニメーションの進捗を0から1の間で正規化
+                const progress = Math.min(elapsed / 1200, 1); // 1200ms (1.2秒) でアニメーション完了
+
+                // 値の計算
+                const value = start + (end - start) * progress;
+
+                if (decimals > 0) {
+                    // 小数点がある場合は文字列として設定
+                    setCount(value.toFixed(decimals));
+                } else {
+                    // 整数として設定
+                    setCount(Math.floor(value));
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(tick);
+                } else {
+                    // アニメーション完了時は最終的な目標値を設定
+                    if (decimals > 0) {
+                        setCount(end.toFixed(decimals));
+                    } else {
+                        setCount(end); // ここはnumber型でOK
+                    }
+                }
+            };
+            requestAnimationFrame(tick);
+        };
+
+        const observer = new window.IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    animate();
+                    observer.disconnect(); // 一度アニメーションしたら監視を停止
+                }
+            },
+            { threshold: 0.3 } // ターゲット要素の30%が見えたら発火
+        );
+
+        if (ref.current) {
+            observer.observe(ref.current);
+        }
+
+        // クリーンアップ関数
+        return () => {
+            if (observer) {
+                observer.disconnect();
+            }
+        };
+    }, [target, decimals]); // 依存配列にtargetとdecimalsを含める
+
+    return (
+        <span ref={ref}>
+            {count}
+            {suffix}
+        </span>
     );
 };
 
@@ -188,14 +288,21 @@ const pricingPlans = [
 ];
 
 const LPPage: React.FC = () => {
-    const refs = useRef<Record<string, HTMLElement | null>>({});
+    const refs = useRef<Record<string, HTMLElement | null>>({}); // 各セクションへのref
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // モバイルメニューの状態
+    const particleRefs = useRef<(HTMLDivElement | null)[]>([]); // パーティクル用のref
+    const [hasCountersAnimated, setHasCountersAnimated] = useState(false); // カウンターアニメーション実行済みフラグ
 
-    const scrollToSection = useCallback((id: string) => {
+    const scrollToSection = (id: string) => {
         const element = refs.current[id];
         if (element) {
-            element.scrollIntoView({ behavior: "smooth" });
+            window.scrollTo({
+                top: element.offsetTop - 80, // ヘッダーの高さ分を考慮 (仮に80px)
+                behavior: "smooth",
+            });
+            setIsMobileMenuOpen(false); // スクロールしたらメニューを閉じる
         }
-    }, []);
+    };
 
     // スクロール時のアニメーション制御（Intersection Observerの汎用的な適用例）
     useEffect(() => {
@@ -211,70 +318,156 @@ const LPPage: React.FC = () => {
             { threshold: 0.2 } // 20%が見えたら発火
         );
 
-        document.querySelectorAll(".animate-on-scroll").forEach((el) => {
-            observer.observe(el);
+        Object.values(refs.current).forEach((el) => {
+            if (el) {
+                el.classList.add("animate-on-scroll");
+                observer.observe(el);
+            }
+        });
+
+        const animateCounters = () => {
+            document.querySelectorAll(".animate-counter").forEach((element) => {
+                const dataCount = element.getAttribute("data-count");
+                if (!dataCount) return;
+
+                const targetValue = parseFloat(dataCount.replace(/\+$/, "")); // 末尾の+を除去して数値化
+                const hasPlusSuffix = dataCount.includes("+"); // 元のdata-countに+が含まれるかチェック
+                let current = 0;
+                const increment = targetValue / 200; // アニメーションの速度調整
+
+                // アニメーション開始前に要素のtextContentを初期値にリセット
+                if (targetValue % 1 === 0) {
+                    // 整数
+                    element.textContent = "0";
+                } else {
+                    // 小数
+                    element.textContent = "0.0";
+                }
+
+                const updateCounter = () => {
+                    current += increment;
+                    if (current < targetValue) {
+                        let displayValue;
+                        if (targetValue % 1 === 0) {
+                            // 整数
+                            displayValue = Math.floor(current);
+                        } else {
+                            // 小数
+                            displayValue = (
+                                Math.round(current * 10) / 10
+                            ).toFixed(1);
+                        }
+                        element.textContent = displayValue.toLocaleString();
+                        requestAnimationFrame(updateCounter);
+                    } else {
+                        // アニメーション完了時は目標値を表示し、必要であれば+を付与
+                        element.textContent = targetValue.toLocaleString();
+                        if (hasPlusSuffix) {
+                            element.textContent += "+";
+                        }
+                    }
+                };
+                updateCounter();
+            });
+        };
+
+        const counterObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting && !hasCountersAnimated) {
+                        // アニメーションがまだ実行されていなければ
+                        animateCounters();
+                        setHasCountersAnimated(true); // アニメーション実行済みフラグを立てる
+                    }
+                });
+            },
+            { threshold: 0.5 } // セクションの半分が見えたら発火
+        );
+
+        const counterSection = document.querySelector(".counter-section");
+        if (counterSection) {
+            counterObserver.observe(counterSection);
+        }
+
+        // モバイルメニュー開閉時のbodyスクロールロック
+        if (isMobileMenuOpen) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "unset";
+        }
+
+        // パーティクルアニメーションのカスタムプロパティと初期スタイルを設定
+        particleRefs.current.forEach((particleRef) => {
+            if (particleRef) {
+                // Math.random() に依存するスタイルはすべてuseEffect内で設定
+                particleRef.style.setProperty(
+                    "width",
+                    `${Math.random() * 20 + 5}px`
+                );
+                particleRef.style.setProperty(
+                    "height",
+                    `${Math.random() * 20 + 5}px`
+                );
+                particleRef.style.setProperty("top", `${Math.random() * 100}%`);
+                particleRef.style.setProperty(
+                    "left",
+                    `${Math.random() * 100}%`
+                );
+                particleRef.style.setProperty(
+                    "--rand-x",
+                    `${Math.random() * 2 - 1}`
+                );
+                particleRef.style.setProperty(
+                    "--rand-y",
+                    `${Math.random() * 2 - 1}`
+                );
+                particleRef.style.setProperty(
+                    "--animation-duration",
+                    `${Math.random() * 10 + 15}s`
+                );
+            }
         });
 
         return () => {
             observer.disconnect();
+            if (counterSection) {
+                counterObserver.disconnect();
+            }
+            document.body.style.overflow = "unset"; // アンマウント時に解除
         };
-    }, []);
-
-    // ダミーのパーティクルアニメーション（CSSやJSライブラリで実装することを想定）
-    const renderParticles = () => (
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-            {Array.from({ length: 50 }).map((_, i) => (
-                <div
-                    key={i}
-                    className="absolute bg-blue-300 rounded-full opacity-50 animate-particle"
-                    style={{
-                        width: `${Math.random() * 5 + 2}px`,
-                        height: `${Math.random() * 5 + 2}px`,
-                        top: `${Math.random() * 100}%`,
-                        left: `${Math.random() * 100}%`,
-                        animationDuration: `${Math.random() * 10 + 5}s`,
-                        animationDelay: `${Math.random() * 5}s`,
-                    }}
-                />
-            ))}
-        </div>
-    );
+    }, [isMobileMenuOpen, hasCountersAnimated]);
 
     return (
         <div className="font-sans text-gray-900 antialiased bg-gray-50">
             {/* ナビゲーションバー */}
-            <header className="sticky top-0 z-50 bg-white shadow-md py-4">
+            <header className="sticky top-0 z-50 shadow-md bg-white py-4">
                 <div className="container mx-auto px-4 flex justify-between items-center">
-                    <Link
-                        href="/"
-                        className="text-2xl font-extrabold text-blue-700 hover:text-blue-800 transition-colors"
-                    >
+                    <Link href="/" className="text-2xl font-bold text-blue-600">
                         Hi, English!
                     </Link>
-                    <nav>
+                    {/* PC用ナビゲーション */}
+                    <nav className="hidden md:flex space-x-6 items-center">
                         <ul className="flex space-x-6">
                             <li>
                                 <button
                                     onClick={() => scrollToSection("features")}
-                                    className="text-gray-600 hover:text-blue-700 transition-colors font-medium"
+                                    className="text-gray-700 hover:text-blue-600 transition-colors font-medium"
                                 >
                                     機能
                                 </button>
                             </li>
                             <li>
                                 <button
-                                    onClick={() =>
-                                        scrollToSection("our-mission")
-                                    }
-                                    className="text-gray-600 hover:text-blue-700 transition-colors font-medium"
+                                    onClick={() => scrollToSection("concept")} // "our-mission"から"concept"に変更
+                                    className="text-gray-700 hover:text-blue-600 transition-colors font-medium"
                                 >
                                     Hi, English!の想い
                                 </button>
                             </li>
                             <li>
                                 <button
-                                    onClick={() => scrollToSection("why-us")}
-                                    className="text-gray-600 hover:text-blue-700 transition-colors font-medium"
+                                    onClick={() => scrollToSection("reason")} // "why-us"から"reason"に変更
+                                    className="text-gray-700 hover:text-blue-600 transition-colors font-medium"
                                 >
                                     選ばれる理由
                                 </button>
@@ -282,7 +475,7 @@ const LPPage: React.FC = () => {
                             <li>
                                 <button
                                     onClick={() => scrollToSection("pricing")}
-                                    className="text-gray-600 hover:text-blue-700 transition-colors font-medium"
+                                    className="text-gray-700 hover:text-blue-600 transition-colors font-medium"
                                 >
                                     料金
                                 </button>
@@ -297,161 +490,209 @@ const LPPage: React.FC = () => {
                             </li>
                         </ul>
                     </nav>
+                    {/* モバイルメニューアイコン */}
+                    <div className="md:hidden">
+                        <button
+                            onClick={() =>
+                                setIsMobileMenuOpen(!isMobileMenuOpen)
+                            }
+                            className="text-gray-700 focus:outline-none"
+                            aria-label="Toggle Mobile Menu"
+                        >
+                            <svg
+                                className="w-7 h-7" // 少し大きく
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                {isMobileMenuOpen ? (
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="2"
+                                        d="M6 18L18 6M6 6l12 12"
+                                    ></path>
+                                ) : (
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="2"
+                                        d="M4 6h16M4 12h16M4 18h16"
+                                    ></path>
+                                )}
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                {/* モバイル用メニュー */}
+                <div
+                    className={`md:hidden fixed inset-0 bg-white z-40 transition-transform transform ${
+                        isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
+                    } ease-in-out duration-300`}
+                >
+                    <div className="pt-20 flex flex-col items-center space-y-6">
+                        <button
+                            onClick={() => scrollToSection("features")}
+                            className="text-gray-700 hover:text-blue-600 transition-colors text-lg font-medium py-2"
+                        >
+                            機能
+                        </button>
+                        <button
+                            onClick={() => scrollToSection("concept")}
+                            className="text-gray-700 hover:text-blue-600 transition-colors text-lg font-medium py-2"
+                        >
+                            Hi, English!の想い
+                        </button>
+                        <button
+                            onClick={() => scrollToSection("reason")}
+                            className="text-gray-700 hover:text-blue-600 transition-colors text-lg font-medium py-2"
+                        >
+                            選ばれる理由
+                        </button>
+                        <button
+                            onClick={() => scrollToSection("pricing")}
+                            className="text-gray-700 hover:text-blue-600 transition-colors text-lg font-medium py-2"
+                        >
+                            料金
+                        </button>
+                        <Link
+                            href="#"
+                            className="mt-4 bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 transition-all shadow-md transform hover:scale-105 text-lg"
+                        >
+                            無料で始める
+                        </Link>
+                    </div>
                 </div>
             </header>
 
             <main>
-                {/* ヒーローセクション */}
-                <section
-                    id="hero"
-                    ref={(el) => {
-                        refs.current.hero = el;
-                    }}
-                    className="relative bg-gradient-to-br from-blue-50 to-blue-200 py-20 md:py-32 overflow-hidden"
-                    style={{
-                        backgroundImage: `url(${BACKGROUND_GRADIENT})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                    }}
-                >
-                    {renderParticles()} {/* 背景パーティクル */}
-                    <div className="container mx-auto px-4 relative z-10 flex flex-col md:flex-row items-center justify-between">
-                        <div className="text-center md:text-left md:w-1/2 mb-10 md:mb-0 animate-fade-in-up">
-                            <h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-4 text-blue-900 drop-shadow-md">
-                                「英語ができる！」
-                                <br />
+                <section className="relative bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-20 md:py-32 overflow-hidden">
+                    {/* 背景パーティクル */}
+                    {[...Array(10)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="absolute bg-white rounded-full opacity-50 animate-particle"
+                            ref={(el) => {
+                                if (el) particleRefs.current[i] = el;
+                            }}
+                            style={{
+                                width: `${Math.random() * 20 + 5}px`,
+                                height: `${Math.random() * 20 + 5}px`,
+                                top: `${Math.random() * 100}%`,
+                                left: `${Math.random() * 100}%`,
+                            }}
+                        ></div>
+                    ))}{" "}
+                    {/* ここに閉じ括弧を追加しました */}
+                    <div className="container mx-auto px-4 text-center relative z-10">
+                        <h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-6 drop-shadow-lg animate-fade-in-up animate-delay-200">
+                            「英語ができる！」
+                            <br />
+                            <span className="text-yellow-300">
                                 をあなたに。
-                                <br />
-                                <span className="text-blue-600">
-                                    挫折しない、本物の英語学習プラットフォーム
-                                </span>
-                            </h1>
-                            <p className="text-lg md:text-xl text-gray-700 mb-8">
-                                単なる知識ではなく、
-                                <b>
-                                    <span className="text-blue-700">
-                                        「使える英語」
-                                    </span>
-                                </b>
-                                を確実に習得できる、 細部まで洗練され尽くした
-                                <b>
-                                    <span className="text-purple-700">
-                                        高機能学習システム
-                                    </span>
-                                </b>
-                                。<br />
-                                このサービスは、選んでくださる全てのお客様の
-                                <span className="font-bold text-green-700">
-                                    日常を豊かにする贈り物
-                                </span>
-                                です。
-                                <br />
-                                もう迷わない、もう挫折しない、
-                                <span className="font-bold text-blue-700">
-                                    新しい「続く」学習体験
-                                </span>
-                                を始めましょう。
-                            </p>
-                            <div className="flex justify-center md:justify-start space-x-4">
-                                <Link
-                                    href="#"
-                                    className="bg-blue-600 text-white text-xl px-8 py-4 rounded-full font-bold shadow-lg hover:bg-blue-700 transition-all transform hover:scale-105"
-                                >
-                                    無料で体験してみる
-                                </Link>
-                                <Link
-                                    href="#our-mission"
-                                    className="bg-white text-blue-600 text-xl px-8 py-4 rounded-full font-bold shadow-lg border-2 border-blue-600 hover:bg-blue-50 transition-all transform hover:scale-105"
-                                >
-                                    Hi, English! の想い
-                                </Link>
-                            </div>
-                        </div>
-                        <div className="md:w-1/2 flex justify-center animate-fade-in-up animate-delay-300">
-                            <Image
-                                src={HERO_IMAGE}
-                                alt="Hi, English! Learning Platform"
-                                width={700}
-                                height={500}
-                                priority
-                                className="max-w-full h-auto shadow-2xl rounded-lg transform rotate-3 hover:rotate-0 transition-transform duration-500"
-                            />
-                        </div>
+                            </span>
+                        </h1>
+                        <p className="text-lg md:text-xl mb-4 opacity-90 animate-fade-in-up animate-delay-400">
+                            挫折しない、本物の英語学習プラットフォーム
+                        </p>
+                        <p className="text-lg md:text-xl mb-10 opacity-90 animate-fade-in-up animate-delay-500">
+                            単なる知識ではなく、「使える英語」を確実に習得できる、
+                            <br className="hidden md:inline" />
+                            細部まで洗練された高機能学習システム。
+                            <br />
+                            このサービスは、選んでくださる全てのお客様の日常を豊かにする贈り物です。
+                            <br />
+                            もう迷わない、もう挫折しない、新しい「続く」「身に付く」学習体験を始めましょう。
+                        </p>
+                        <Link
+                            href="#"
+                            className="bg-white text-blue-600 text-lg md:text-xl px-8 py-4 rounded-full font-bold shadow-lg hover:bg-gray-100 transition-all transform hover:scale-105 animate-fade-in-up animate-delay-600"
+                        >
+                            無料で体験してみる
+                        </Link>
                     </div>
                 </section>
 
                 {/* --- */}
-                {/* なぜHi, English!を選ぶと良いのか？ */}
+                {/* なぜHi, English!を作ったのか？ */}
                 <section
-                    id="our-mission"
+                    id="concept" // our-mission から concept に変更
                     ref={(el) => {
-                        refs.current["our-mission"] = el;
+                        refs.current.concept = el; // refsのキーも concept に変更
                     }}
                     className="py-20 bg-white animate-on-scroll"
                 >
                     <div className="container mx-auto px-4 text-center">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
-                            なぜ、
-                            <span className="text-blue-600">
-                                Hi, English!
-                            </span>{" "}
-                            を開発したのか？
+                            <span className="text-blue-600">Hi, English!</span>{" "}
+                            の想い
                         </h2>
                         <div className="max-w-4xl mx-auto text-lg text-gray-700 leading-relaxed space-y-6">
                             <p>
                                 「英語が話せたら、もっと世界が広がるのに…」そう感じたことはありませんか？
                                 現代社会において、英語は単なるスキルではなく、
-                                <b>
+                                <b className="text-blue-700">
                                     あなたから言語の壁を取り払い、多くの可能性を広げるパスポート
                                 </b>
                                 です。
-                                しかし、従来の学習方法では、多くのお客様が「やった気になっただけで何もできるようになっていない」「アプリの機能が使い心地が悪すぎるし、コンテンツも微妙…」と感じ、途中で挫折してしまう現実があります。
+                            </p>
+                            <p>
+                                しかし、
+                                <b>
+                                    「続かない」「身につかない」英語学習に悩む人が後を絶ちません。
+                                </b>
+                                多くの教材やアプリが世の中に溢れているのに、なぜでしょうか？
                             </p>
                             <p className="font-semibold text-blue-700">
-                                私たちは、英語学習におけるこれらの「本質的な障壁」を根本から取り除くことに情熱を注ぎました。
+                                私たちは、英語学習におけるこれらの「本質的な障壁」を根本から取り除き、
+                                <b>
+                                    「本当に使える英語力」を身につけるためには、日々の小さな積み重ねと正しい学習サイクルが不可欠
+                                </b>
+                                だと考え、このプラットフォームを開発しました。
                             </p>
                             <p>
                                 <b>Hi, English!</b>
                                 は、かつての英語学習アプリとは一線を画します。
-                                お客様が本当に英語を使えるようになることを目標とし、
-                                そのために必要な
-                                <b>
-                                    開発コストの高い内部システムを一切妥協せず、すべて実現
+                                お客様が本当に英語を使えるようになることを目標とし、そのために必要な
+                                <b className="text-blue-700">
+                                    開発コストの高い内部システムを一切妥協せず、すべてを実現
                                 </b>
                                 しました。
-                                これにより、お客様は「なんかやった気になったけど何もできるようになってない」という学習体験から完全に解放されます。
-                                私たちのサービスは、あらゆる面で
-                                <b>ユーザファースト</b>
-                                を徹底しています。このサービスは
                                 <b>
-                                    割のいいお金儲けを目的としておらず、価値あるサービスを提供するため開発コストを完全に度外視しています。
+                                    最新AI技術と実証された学習理論を組み合わせ、「続く」「伸びる」を徹底的に追求した全く新しい英語学習プラットフォーム
                                 </b>
+                                です。
                             </p>
                             <p>
-                                英語力の習得には、単なる知識の詰め込みだけでなく、
-                                <b>継続的な「慣れ」と「実践」</b>が不可欠です。
+                                単なる知識の詰め込みではなく、
+                                <b className="text-blue-700">
+                                    継続的な「慣れ」と「実践」
+                                </b>
+                                が不可欠です。
                                 特に、早期にこの「慣れ」のフェーズを乗り越えることが、飛躍的な英語力向上に繋がります。
                                 Hi,
                                 English!は、この「慣れ」を効果的に促進し、お客様が挫折することなく、
-                                <b>
-                                    <span className="text-blue-700">
-                                        理論と実践の両面から英語を「扱う」能力
-                                    </span>
+                                <b className="text-blue-700">
+                                    理論と実践の両面から英語を「扱う」能力
                                 </b>
                                 を確実に身につけられるよう設計されています。
                             </p>
                             <p>
-                                「英語ができるようになりたい！」と願う、お客様のためのサービスです。
+                                「英語ができるようになりたい！」と願う、すべてのお客様のためのサービスです。
                                 私たちは、英語という壁を効率的かつ確実に乗り越えることで、
                                 お客様の
-                                <b>
-                                    <span className="font-bold text-xl text-green-600">
-                                        これからの人生の価値を最大化します。
-                                    </span>
+                                <b className="font-bold text-xl text-green-600">
+                                    これからの人生の価値を最大化します。
                                 </b>
-                                これは、お客様が英語を理由に人生を諦めてしまわないよう、私たちからの
-                                <b>力強い後押し</b>です。 これがHi,
-                                English!が目指すミッションです。
+                                <b>
+                                    あなたの夢や目標への道を切り開く
+                                    「一つの武器」
+                                </b>
+                                として英語が本当に役立つように。 それが、
+                                <b>Hi, English!</b>
+                                が目指すミッションであり、私たちからの
+                                <b>力強い後押し</b>です。
                             </p>
                         </div>
                     </div>
@@ -468,7 +709,7 @@ const LPPage: React.FC = () => {
                 >
                     <div className="container mx-auto px-4 text-center">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
-                            Hi, English! がお客様の学習を変える
+                            Hi, English! があなたの学習を後押しする
                             <br />
                             <span className="text-blue-600">
                                 3つの本質的な価値
@@ -499,7 +740,13 @@ const LPPage: React.FC = () => {
 
                 {/* --- */}
                 {/* 独自の強みセクション */}
-                <section className="py-20 bg-white animate-on-scroll">
+                <section
+                    id="our-strength"
+                    className="py-20 bg-white animate-on-scroll"
+                    ref={(el) => {
+                        refs.current.ourStrength = el; // refsに追加
+                    }}
+                >
                     <div className="container mx-auto px-4">
                         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-gray-800">
                             <span className="text-blue-600">Hi, English!</span>{" "}
@@ -522,27 +769,26 @@ const LPPage: React.FC = () => {
                                     </span>
                                     高機能システム
                                 </h3>
-                                <p className="text-gray-700 leading-relaxed mb-4">
-                                    Hi,
-                                    English!の根幹は、単なるAIの活用を超えた、
-                                    <b>
-                                        圧倒的に高品質かつ未来を見通したシステム設計
+                                <p className="text-gray-700 leading-relaxed">
+                                    <b>Hi, English!の根幹</b>
+                                    は、単なるAIの活用を超えた、
+                                    <b className="text-blue-700">
+                                        圧倒的に高品質なシステム設計
                                     </b>
                                     です。
-                                    お客様の学習しやすさ、楽しさ、効率、効果を最大限に引き出すため、
-                                    最先端のAI技術を比較検証し、システム内部での利用を最適化しました。
-                                    <b>徹底的かつ網羅的な動作検証</b>
-                                    と、品質担保のための
-                                    <b>確かな内部技術の工夫</b>
-                                    が、この革新的な学習体験を実現しています。
+                                    ユーザーの学習しやすさ、楽しさ、効率、効果を最大限に引き出すため、
+                                    最先端のAI技術を徹底的に検証し、
+                                    <b>最適化された内部システム</b>で、
+                                    <b className="text-blue-700">
+                                        革新的な学習体験
+                                    </b>
+                                    を実現しています。
                                 </p>
-                                <p className="text-gray-700 leading-relaxed">
-                                    AIは、既存の各種機能の利便性や高いUXをさらに高めるための補助であり、
-                                    自動コンテンツ生成はその内部で扱えるデータ生成の補助です。
-                                    これにより、お客様は想定しているコンテンツを迅速に作成・カスタマイズし、
-                                    プラットフォームの機能を最大限に活用できます。
-                                    高精度な発音解析や自然な対話が可能な英会話機能も、このシステム全体の構成要素として、
-                                    これまでの学習サービスとは一線を画す体験を提供します。
+                                <p className="text-gray-700 leading-relaxed mt-4">
+                                    <b>
+                                        AIを既存機能の利便性と高いUXをさらに高めるための強力な補助
+                                    </b>
+                                    として内部で活用することで、高精度な発音解析、自然な対話が可能なAI英会話、迅速なコンテンツ生成などを実現し、これまでの学習サービスとは一線を画す機能を実現しています。
                                 </p>
                             </div>
 
@@ -553,9 +799,9 @@ const LPPage: React.FC = () => {
                                     </span>
                                     高品質コンテンツ
                                 </h3>
-                                <p className="text-gray-700 leading-relaxed mb-4">
+                                <p className="text-gray-700 leading-relaxed">
                                     Hi,
-                                    English!のコンテンツは、単なる知識の習得に留まらず、
+                                    English!のコンテンツは、単なる知識習得に留まらず、
                                     <b>
                                         「学んだ英語を実際に使いこなせるようになる」
                                     </b>
@@ -564,26 +810,26 @@ const LPPage: React.FC = () => {
                                     <b>ネイティブが日常的に使う生きた表現</b>
                                     や、
                                     <b>最新の言語データ</b>
-                                    に基づいており、その実用性を徹底的に検証しています。
+                                    に基づいており、その実用性を徹底検証済みです。
                                 </p>
-                                <p className="text-gray-700 leading-relaxed">
+                                <p className="text-gray-700 leading-relaxed mt-4">
                                     文法学習では、
                                     <b className="text-blue-700">
-                                        実際の会話シーンやビジネスシーンでどのように使われるか
+                                        実際の会話・ビジネスシーンでの使い方
                                     </b>
                                     を具体的に提示。 英会話では、
                                     <b className="text-blue-700">
                                         現実の多様なシチュエーション
                                     </b>
-                                    を想定した対話練習を重ねることで、
-                                    お客様の頭の中で「この表現はこう使うんだ」と明確に繋がり、自然と口から英語がこぼれるようになる。
-                                    <b className="text-blue-700">
-                                        日々の学習が、着実に「使える英語」への確信へと変わっていく
+                                    を想定した対話練習を重ねます。 これにより、
+                                    <b>
+                                        日々の学習が「使える英語」への確信へと変わり、自然と口から英語がこぼれる瞬間
                                     </b>
-                                    瞬間を、お客様はHi,
-                                    English!で何度も体験するでしょう。
+                                    を、 Hi,
+                                    English!で何度も体験できるでしょう。
                                 </p>
                             </div>
+
                             <div className="md:order-4 order-4 animate-fade-in-up animate-delay-500">
                                 <Image
                                     src={MOCKUP_CONTENT_CREATION}
@@ -608,17 +854,24 @@ const LPPage: React.FC = () => {
                                     <span className="text-purple-600">
                                         AIがアシストするパーソナルメンタリング
                                     </span>
-                                    で、お客様の成長を確実にリード
+                                    で、あなたの成長を確実にリード
                                 </h3>
-                                <p className="text-gray-700 leading-relaxed mb-4">
-                                    Hi,
-                                    English!では、お客様専属のAIアシスタントが、学習全体を力強くサポートします。
-                                    個人の学習履歴や習熟度を自動で分析し、最適な学習パスを提案。
-                                    つまずきやすいポイントを自動検出し、集中的な復習を促します。
-                                </p>
                                 <p className="text-gray-700 leading-relaxed">
-                                    定期的なフィードバックと目標設定支援により、モチベーションを維持しながら、無駄なく確実にスキルを身につけられます。
-                                    まるでパーソナルトレーナーのように、お客様の英語学習を最初から最後まで、力強くサポートします。
+                                    Hi,
+                                    English!では、あなた専属のAIアシスタントが、学習全体を力強くサポートします。
+                                    個人の学習履歴や習熟度を自動で分析し、
+                                    <b>最適な学習パスを提案</b>。
+                                    つまずきやすいポイントを自動検出し、
+                                    <b>集中的な復習を促します</b>。
+                                </p>
+                                <p className="text-gray-700 leading-relaxed mt-4">
+                                    定期的なフィードバックと目標設定支援により、モチベーションを維持しながら、
+                                    <b>
+                                        無駄なく確実にスキルを身につけられます
+                                    </b>
+                                    。
+                                    まるでパーソナルトレーナーのように、あなたの英語学習を最初から最後まで、
+                                    <b>力強くサポート</b>します。
                                 </p>
                             </div>
                         </div>
@@ -637,7 +890,7 @@ const LPPage: React.FC = () => {
                     <div className="container mx-auto px-4 text-center">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
                             <span className="text-blue-600">Hi, English!</span>{" "}
-                            が切り開く、お客様の未来
+                            と共に切り開く、あなたの未来
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                             <div className="md:order-1 order-2 animate-fade-in-up">
@@ -814,7 +1067,13 @@ const LPPage: React.FC = () => {
 
                 {/* --- */}
                 {/* 学習フローセクション */}
-                <section className="py-20 bg-white animate-on-scroll">
+                <section
+                    id="study_flow"
+                    className="py-20 bg-white animate-on-scroll"
+                    ref={(el) => {
+                        refs.current.study_flow = el;
+                    }}
+                >
                     <div className="container mx-auto px-4 text-center">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
                             Hi, English! での
@@ -865,11 +1124,17 @@ const LPPage: React.FC = () => {
 
                 {/* --- */}
                 {/* ユーザーの声 / 実績セクション */}
-                <section className="py-20 bg-gray-50 animate-on-scroll">
+                <section
+                    id="user_feedbacks"
+                    className="py-20 bg-gray-50 animate-on-scroll"
+                    ref={(el) => {
+                        refs.current.user_feedbacks = el;
+                    }}
+                >
                     <div className="container mx-auto px-4 text-center">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
                             <span className="text-blue-600">
-                                お客様の声 (仮です。)
+                                ユーザの声 (仮です。)
                             </span>
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -893,33 +1158,38 @@ const LPPage: React.FC = () => {
                             />
                         </div>
                         {/* 実績データの表示（例） */}
-                        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-blue-800 font-bold text-center">
-                            <div className="p-6 bg-white rounded-lg shadow-md animate-fade-in-up">
-                                <p
-                                    className="text-5xl animate-counter"
-                                    data-count="300000"
-                                >
-                                    300,000+
-                                </p>
-                                <p className="text-xl mt-2">総ダウンロード数</p>
-                            </div>
-                            <div className="p-6 bg-white rounded-lg shadow-md animate-fade-in-up animate-delay-200">
-                                <p
-                                    className="text-5xl animate-counter"
-                                    data-count="95"
-                                >
-                                    95%+
-                                </p>
-                                <p className="text-xl mt-2">継続率</p>
-                            </div>
-                            <div className="p-6 bg-white rounded-lg shadow-md animate-fade-in-up animate-delay-400">
-                                <p
-                                    className="text-5xl animate-counter"
-                                    data-count="4.8"
-                                >
-                                    4.8+
-                                </p>
-                                <p className="text-xl mt-2">ストア平均評価</p>
+                        <div className="container mx-auto px-4 text-center counter-section mt-16">
+                            <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
+                                Hi, English! が選ばれる
+                                <span className="text-blue-600">
+                                    確かな実績
+                                </span>
+                            </h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-blue-800 font-bold">
+                                <div className="p-6 bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 min-h-[140px] flex flex-col justify-center items-center">
+                                    <p className="text-5xl md:text-6xl text-blue-700">
+                                        <Counter target={300} suffix="万" />
+                                    </p>
+                                    <p className="text-xl md:text-2xl mt-3 text-gray-700">
+                                        総ダウンロード数
+                                    </p>
+                                </div>
+                                <div className="p-6 bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 min-h-[140px] flex flex-col justify-center items-center">
+                                    <p className="text-5xl md:text-6xl text-blue-700">
+                                        <Counter target={95} suffix="%" />
+                                    </p>
+                                    <p className="text-xl md:text-2xl mt-3 text-gray-700">
+                                        継続率
+                                    </p>
+                                </div>
+                                <div className="p-6 bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 min-h-[140px] flex flex-col justify-center items-center">
+                                    <p className="text-5xl md:text-6xl text-blue-700">
+                                        <Counter target={4.8} decimals={1} />
+                                    </p>
+                                    <p className="text-xl md:text-2xl mt-3 text-gray-700">
+                                        ストア平均評価
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1002,7 +1272,13 @@ const LPPage: React.FC = () => {
 
                 {/* --- */}
                 {/* 安心・安全への取り組みセクション */}
-                <section className="py-20 bg-white animate-on-scroll">
+                <section
+                    id="our_security"
+                    className="py-20 bg-white animate-on-scroll"
+                    ref={(el) => {
+                        refs.current.our_security = el;
+                    }}
+                >
                     <div className="container mx-auto px-4 text-center">
                         <h2 className="text-3xl md:text-4xl font-bold mb-12 text-gray-800">
                             <span className="text-blue-600">安心・安全</span>
@@ -1017,7 +1293,7 @@ const LPPage: React.FC = () => {
                             お客様に安心してご利用いただくため、
                             <b>数千以上の脅威モデル</b>に対し、
                             <b>すべてのレイヤーで対策</b>
-                            を講じることで、最高レベルのセキュリティと堅牢なシステムを実現しています。この確かな技術力と経験があるからこそ、私たちは皆様に最高の学習環境を安全安心に提供できます。
+                            を講じることで、最高レベルのセキュリティと堅牢なシステムを実現しています。この確かな技術力・設計・対策により私たちは皆様に最高の学習環境を安全安心に提供します。
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             <div className="p-6 bg-gray-50 rounded-lg shadow-md flex flex-col items-center text-center animate-fade-in-up">
@@ -1106,10 +1382,16 @@ const LPPage: React.FC = () => {
 
                 {/* --- */}
                 {/* CTAセクション */}
-                <section className="py-20 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-center animate-on-scroll">
+                <section
+                    id="cta"
+                    className="py-20 bg-gradient-to-r from-blue-600 to-indigo-700 text-white text-center animate-on-scroll"
+                    ref={(el) => {
+                        refs.current.cta = el;
+                    }}
+                >
                     <div className="container mx-auto px-4">
                         <h2 className="text-3xl md:text-5xl font-extrabold leading-tight mb-6 drop-shadow-lg">
-                            さあ、お客様の英語学習を
+                            さあ、あなたの英語学習を
                             <br />
                             <span className="text-yellow-300">
                                 Hi, English!
@@ -1141,36 +1423,36 @@ const LPPage: React.FC = () => {
                             Hi, English!
                         </h3>
                         <p className="text-sm">
-                            究極の学習体験を提供する、お客様の未来を拓く英語学習プラットフォーム。
+                            究極の学習体験を提供する、あなたの未来を拓く英語学習プラットフォーム。
                         </p>
                         <div className="flex space-x-4 mt-4">
                             <Link
                                 href="#"
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className="text-[#1DA1F2] hover:text-white transition-colors" // Twitter Blue
                             >
                                 <FaTwitter size={24} />
                             </Link>
                             <Link
                                 href="#"
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className="text-[#1877F2] hover:text-white transition-colors" // Facebook Blue
                             >
                                 <FaFacebook size={24} />
                             </Link>
                             <Link
                                 href="#"
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className="text-[#E4405F] hover:text-white transition-colors" // Instagram Red/Pink
                             >
                                 <FaInstagram size={24} />
                             </Link>
                             <Link
                                 href="#"
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className="text-[#0A66C2] hover:text-white transition-colors" // LinkedIn Blue
                             >
                                 <FaLinkedin size={24} />
                             </Link>
                             <Link
                                 href="#"
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className="text-[#FF0000] hover:text-white transition-colors" // YouTube Red
                             >
                                 <FaYoutube size={24} />
                             </Link>
