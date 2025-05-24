@@ -1009,9 +1009,9 @@ const LPPage: React.FC = () => {
                             への徹底的な取り組み
                         </h2>
                         <div className="max-w-4xl mx-auto text-center text-lg text-gray-700 leading-relaxed mb-10">
-                            Hi, English!は、長年のアプリ開発経験を持つ
+                            Hi, English!は、
                             <b>
-                                ITエンジニアが、その得意とするセキュリティ分野の技術力を結集
+                                とある学生ITエンジニアが、その得意とするセキュリティ分野の技術力を結集
                             </b>
                             して構築しました。
                             お客様に安心してご利用いただくため、
